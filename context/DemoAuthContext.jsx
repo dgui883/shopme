@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import { supabase, isSupabaseConfigured } from '@/lib/supabaseClient';
 import { callFunction } from '@/lib/functionsClient';
 
 /**
@@ -24,6 +24,8 @@ const DemoAuthContext = createContext(null);
 const EMPTY_SESSION = { status: 'guest', role: 'customer', user: null, store: null, banned: false, suspended: false };
 
 async function loadSessionFromSupabase() {
+  if (!isSupabaseConfigured) return EMPTY_SESSION;
+
   const { data: { session: authSession } } = await supabase.auth.getSession();
   if (!authSession) return EMPTY_SESSION;
 
@@ -83,6 +85,8 @@ export function DemoAuthProvider({ children }) {
   useEffect(() => {
     refresh().finally(() => setReady(true));
 
+    if (!isSupabaseConfigured) return;
+
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
       refresh();
     });
@@ -90,12 +94,14 @@ export function DemoAuthProvider({ children }) {
   }, [refresh]);
 
   const login = useCallback(async (email, password) => {
+    if (!isSupabaseConfigured) throw new Error('Supabase is not configured.');
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw new Error(error.message);
     return refresh();
   }, [refresh]);
 
   const register = useCallback(async (email, password, fullName) => {
+    if (!isSupabaseConfigured) throw new Error('Supabase is not configured.');
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) throw new Error(error.message);
     if (fullName && data?.user) {
@@ -106,6 +112,10 @@ export function DemoAuthProvider({ children }) {
   }, [refresh]);
 
   const logout = useCallback(async () => {
+    if (!isSupabaseConfigured) {
+      setSession(EMPTY_SESSION);
+      return;
+    }
     await supabase.auth.signOut();
     setSession(EMPTY_SESSION);
   }, []);
